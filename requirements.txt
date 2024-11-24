@@ -1,0 +1,12 @@
+flask
+flask-sqlalchemy
+flask-migrate
+flask-session
+flask-cors
+sqlalchemy-serializer
+pyjwt
+flask-bcrypt
+flask-limiter
+pytz
+python-dotenv
+APScheduler
