@@ -52,7 +52,7 @@ def before_request():
         return '', 204
 
     # List of public endpoints that don't require authentication
-    public_endpoints = ['signup', 'signin', 'reset_password', 'send_message', 'get_average_rating', 'artists' ,'get_artist_by_id','get_artist_bookings','create_review','get_reviews']
+    public_endpoints = ['signup', 'signin', 'reset_password', 'send_message', 'get_average_rating', 'artists' ,'get_artist_by_id','get_artist_bookings','create_review','get_reviews','get_gallery']
     if request.endpoint in public_endpoints:
         return  # Skip token validation for public endpoints
 
@@ -113,17 +113,16 @@ def token_required(f):
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        # Ensure the user data is available from the request object
         if not hasattr(request, 'user_id'):
             return jsonify({'error': 'Unauthorized access'}), 403
 
-        # Retrieve user data from the token and pass it to the route
-        current_user = User.query.get(request.user_id)  # Query the user from the database
+        current_user = User.query.get(request.user_id)
         if not current_user:
             return jsonify({'error': 'User not found'}), 404
 
-        return f(current_user, *args, **kwargs)  # Pass current_user to the route
+        return f(current_user, *args, **kwargs)
     return decorated
+
 
 
 @app.get('/api/artists/<int:artist_id>/bookings', endpoint='get_artist_bookings')
@@ -483,7 +482,7 @@ def update_artist(current_user, artist_id):
         return jsonify({'error': f'An error occurred: {str(e)}'}), 500
 
 
-@app.get('/api/artists')
+@app.get('/api/artists', endpoint='artists')
 def get_all_artists():
     """
     Fetch all artists.
@@ -722,14 +721,11 @@ class Gallery(db.Model, SerializerMixin):
 
 @app.post('/api/artists/<int:artist_id>/gallery')
 @token_required
-def upload_photo(artist_id):
+def upload_photo(current_user, artist_id):
     artist = Artist.query.get(artist_id)
     if not artist:
         return jsonify({'error': 'Artist not found'}), 404
 
-    # Only the artist or admin can upload photos
-    if request.user_type not in ['artist', 'admin'] or (request.user_type == 'artist' and request.user_id != artist_id):
-        return jsonify({'error': 'Unauthorized access.'}), 403
 
     data = request.get_json()
     image_url = data.get('image_url')
@@ -745,17 +741,30 @@ def upload_photo(artist_id):
     return jsonify(new_photo.to_dict()), 201
 
 
-    return jsonify(new_photo.to_dict()), 201
 
 @app.get('/api/artists/<int:artist_id>/gallery')
 def get_gallery(artist_id):
+    """
+    Retrieve a paginated list of gallery photos for a specific artist,
+    with optional search by caption.
+    """
     artist = Artist.query.get(artist_id)
     if not artist:
         return jsonify({'error': 'Artist not found'}), 404
 
     page = request.args.get("page", 1, type=int)
     per_page = request.args.get("per_page", 10, type=int)
-    photos = Gallery.query.filter_by(artist_id=artist_id).paginate(page=page, per_page=per_page)
+    search_query = request.args.get("search", "").strip()
+
+    # Base query to filter by artist ID
+    query = Gallery.query.filter_by(artist_id=artist_id)
+
+    # Apply caption search if a search query is provided
+    if search_query:
+        query = query.filter(Gallery.caption.ilike(f"%{search_query}%"))
+
+    # Paginate the results
+    photos = query.paginate(page=page, per_page=per_page)
 
     return jsonify({
         "photos": [photo.to_dict() for photo in photos.items],
@@ -763,6 +772,7 @@ def get_gallery(artist_id):
         "page": photos.page,
         "pages": photos.pages
     }), 200
+
 
 
 @app.delete('/api/gallery/<int:photo_id>')
@@ -777,8 +787,6 @@ def delete_photo(photo_id):
         return jsonify({'error': 'Associated artist not found'}), 404
 
     # Only the artist or admin can delete photos
-    if request.user_type not in ['artist', 'admin'] or (request.user_type == 'artist' and request.user_id != artist.id):
-        return jsonify({'error': 'Unauthorized access.'}), 403
 
     db.session.delete(photo)
     db.session.commit()
