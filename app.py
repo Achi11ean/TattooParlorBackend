@@ -52,7 +52,7 @@ def before_request():
         return '', 204
 
     # List of public endpoints that don't require authentication
-    public_endpoints = ['signup', 'signin', 'reset_password', 'send_message', 'get_average_rating', 'artists' ,'get_artist_by_id','get_artist_bookings','create_review','get_reviews','get_gallery']
+    public_endpoints = ['signup', 'signin', 'reset_password', 'send_message', 'get_booking','get_average_rating', 'artists' ,'get_artist_by_id','get_artist_bookings','create_review','get_reviews','get_gallery', 'bookings','get_artist_bookings', 'create_booking']
     if request.endpoint in public_endpoints:
         return  # Skip token validation for public endpoints
 
@@ -176,7 +176,9 @@ class Booking(db.Model, SerializerMixin):
     price = db.Column(db.Float, nullable=False)
     payment_status = db.Column(db.String(20), default="unpaid")
     status = db.Column(db.String(20), default="pending")
-
+    name = db.Column(db.String(100), nullable=False)
+    phone_number = db.Column(db.String(15), nullable=False)
+    call_or_text_preference = db.Column(db.String(10), nullable=False)  # Choices: 'call', 'text'
     artist = db.relationship("Artist", back_populates="bookings")
 
     serialize_rules = ("-artist.bookings",)
@@ -191,7 +193,7 @@ class Booking(db.Model, SerializerMixin):
         print(f"Formatted dictionary: {booking_dict}")
         return booking_dict
 
-@app.post('/api/bookings')
+@app.post('/api/bookings', endpoint='create_booking')
 def create_booking():
     data = request.get_json()
     tattoo_style = data.get('tattoo_style')
@@ -201,8 +203,11 @@ def create_booking():
     studio_location = data.get('studio_location')
     appointment_date = data.get('appointment_date')
     price = data.get('price')
+    name = data.get('name')
+    phone_number = data.get('phone_number')
+    call_or_text_preference = data.get('call_or_text_preference')
 
-    if not all([tattoo_style, tattoo_size, placement, artist_id, studio_location, appointment_date, price]):
+    if not all([tattoo_style, tattoo_size, placement, artist_id, studio_location, appointment_date, price, name, phone_number, call_or_text_preference]):
         return jsonify({'error': 'All fields are required'}), 400
 
     try:
@@ -219,7 +224,10 @@ def create_booking():
         artist_id=artist_id,
         studio_location=studio_location,
         appointment_date=appointment_date_obj,
-        price=price
+        price=price,
+        name=name,
+        phone_number=phone_number,
+        call_or_text_preference=call_or_text_preference
     )
 
     db.session.add(new_booking)
@@ -261,7 +269,7 @@ def update_booking(booking_id):
     db.session.commit()
     return jsonify(booking.to_dict()), 200
 
-@app.get('/api/bookings')
+@app.get('/api/bookings', endpoint='bookings')
 def get_bookings():
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 10, type=int)
