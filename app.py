@@ -809,7 +809,7 @@ def get_all_galleries():
     Fetch all galleries with optional pagination.
     """
     page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 10, type=int)
+    per_page = request.args.get('per_page', 12, type=int)
 
     galleries = Gallery.query.options(joinedload(Gallery.artist)).paginate(page=page, per_page=per_page)
 
