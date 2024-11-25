@@ -52,7 +52,7 @@ def before_request():
         return '', 204
 
     # List of public endpoints that don't require authentication
-    public_endpoints = ['signup', 'signin', 'reset_password', 'send_message', 'get_booking','get_average_rating', 'artists' ,'get_artist_by_id','get_artist_bookings','create_review','get_reviews','get_gallery', 'bookings','get_artist_bookings', 'create_booking']
+    public_endpoints = ['signup', 'signin', 'reset_password', 'send_message', 'get_booking','get_average_rating', 'artists' ,'get_artist_by_id','get_artist_bookings','create_review','get_reviews','get_gallery', 'bookings', 'create_booking', 'get_all_galleries']
     if request.endpoint in public_endpoints:
         return  # Skip token validation for public endpoints
 
@@ -724,6 +724,8 @@ class Gallery(db.Model, SerializerMixin):
     def to_dict(self):
         photo_dict = super().to_dict()
         photo_dict["created_at"] = format_datetime(self.created_at)  # Use the helper function
+        photo_dict["artist_name"] = self.artist.name  # Include the artist's name
+
         return photo_dict
 
 
@@ -782,6 +784,22 @@ def get_gallery(artist_id):
     }), 200
 
 
+@app.get('/api/galleries')
+def get_all_galleries():
+    """
+    Fetch all galleries with optional pagination.
+    """
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 10, type=int)
+
+    galleries = Gallery.query.options(joinedload(Gallery.artist)).paginate(page=page, per_page=per_page)
+
+    return jsonify({
+        "galleries": [gallery.to_dict() for gallery in galleries.items],
+        "total": galleries.total,
+        "page": galleries.page,
+        "pages": galleries.pages
+    }), 200
 
 @app.delete('/api/gallery/<int:photo_id>')
 @token_required
