@@ -52,7 +52,7 @@ def before_request():
         return '', 204
 
     # List of public endpoints that don't require authentication
-    public_endpoints = ['signup', 'signin', 'reset_password', 'send_message', 'get_booking','get_average_rating', 'artists' ,'get_artist_by_id','get_artist_bookings','create_review','get_reviews','get_gallery', 'bookings', 'create_booking', 'get_all_galleries']
+    public_endpoints = ['signup', 'signin', 'reset_password', 'send_message', 'get_booking','get_average_rating', 'artists' ,'get_artist_by_id','get_artist_bookings','create_review','get_reviews','get_gallery', 'bookings', 'create_booking', 'get_all_galleries','create_inquiry']
     if request.endpoint in public_endpoints:
         return  # Skip token validation for public endpoints
 
@@ -136,6 +136,25 @@ def get_artist_bookings(artist_id):
 
     bookings = Booking.query.filter_by(artist_id=artist_id).all()
     return jsonify([booking.to_dict() for booking in bookings]), 200
+
+@app.delete('/api/users/<int:user_id>')
+@token_required
+def delete_user(current_user, user_id):
+    if current_user.user_type != 'admin':
+        return jsonify({'error': 'Unauthorized access'}), 403
+
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    try:
+        db.session.delete(user)
+        db.session.commit()
+        return jsonify({'message': 'User deleted successfully'}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'An error occurred: {str(e)}'}), 500
+
 
 @app.delete('/api/artists/<int:artist_id>')
 @token_required
@@ -973,12 +992,12 @@ def user_activity():
 
 @app.route('/api/artist-dashboard', methods=['GET', 'PATCH'])
 @token_required
-def artist_dashboard():
+def artist_dashboard(current_user):  # Accept the current_user argument
     if not is_artist_user():
         return jsonify({'error': 'Access denied. Artists only.'}), 403
 
     # Fetch the artist's profile
-    artist = Artist.query.filter_by(created_by=request.user_id).first()
+    artist = Artist.query.filter_by(created_by=current_user.id).first()
     if not artist:
         return jsonify({'error': 'Artist profile not found.'}), 404
 
@@ -1031,12 +1050,12 @@ def artist_dashboard():
 
 @app.route('/api/admin-dashboard', methods=['GET'])
 @token_required
-def admin_dashboard():
+def admin_dashboard(current_user):  # Add current_user parameter
     if not is_admin_user():
         return jsonify({'error': 'Access denied. Admins only.'}), 403
 
     # Personal Artist Profile (if admin is also an artist)
-    artist = Artist.query.filter_by(created_by=request.user_id).first()
+    artist = Artist.query.filter_by(created_by=current_user.id).first()
     personal_data = None
     if artist:
         # Fetch personal bookings, reviews, and performance metrics
@@ -1186,7 +1205,7 @@ def send_email(recipient, subject, body):
 
 @app.get('/api/admin-dashboard/bookings-trends')
 @token_required
-def monthly_booking_trends():
+def monthly_booking_trends(current_user):  # Add current_user parameter
     if not is_admin_user():
         return jsonify({'error': 'Access denied. Admins only.'}), 403
 
@@ -1200,13 +1219,136 @@ def monthly_booking_trends():
         extract('month', Booking.appointment_date)
     ).order_by('month').all()
 
-    monthly_trends = monthly_trends = [
-    {'month': calendar.month_name[month], 'total_bookings': total} 
-    for month, total in trends
-]
+    monthly_trends = [
+        {'month': calendar.month_name[month], 'total_bookings': total} 
+        for month, total in trends
+    ]
     return jsonify({
         'year': current_year,
         'monthly_trends': monthly_trends
+    }), 200
+#------------------------------------------------------------------------------------inquiries#
+
+class Inquiry(db.Model, SerializerMixin):
+    __tablename__ = "inquiries"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    phone_number = db.Column(db.String(15), nullable=True)  # Optional
+    email = db.Column(db.String(255), nullable=False)  # Required
+    inquiry = db.Column(db.Text, nullable=False)  # Required inquiry message
+    submitted_at = db.Column(db.DateTime, default=db.func.now(), nullable=False)
+    status = db.Column(db.String(50), default="pending", nullable=False)  # New column
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "phone_number": self.phone_number,
+            "email": self.email,
+            "inquiry": self.inquiry,
+            "submitted_at": format_datetime(self.submitted_at),
+            "status": self.status,  # Include status in the response
+        }
+
+@app.post('/api/inquiries')
+def create_inquiry():
+    data = request.get_json()
+
+    # Validate required fields
+    required_fields = ['name', 'email', 'inquiry']
+    if not all(data.get(field) for field in required_fields):
+        return jsonify({"error": f"Missing required fields: {', '.join(required_fields)}"}), 400
+
+    # Validate email format
+    email = data.get('email')
+    if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
+        return jsonify({"error": "Invalid email format"}), 400
+
+    # Create a new inquiry
+    new_inquiry = Inquiry(
+        name=data.get('name'),
+        phone_number=data.get('phone_number'),
+        email=email,
+        inquiry=data.get('inquiry'),
+        status=data.get('status', 'pending'),  # Default to 'pending'
+    )
+
+    # Save to database
+    try:
+        db.session.add(new_inquiry)
+        db.session.commit()
+        return jsonify(new_inquiry.to_dict()), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"An error occurred: {str(e)}"}), 500
+
+@app.patch('/api/inquiries/<int:inquiry_id>')
+@token_required
+def update_inquiry(current_user, inquiry_id):
+    # Ensure only admin or artist users can update
+    if current_user.user_type not in ['admin', 'artist']:
+        return jsonify({'error': 'Access denied. Admins and artists only.'}), 403
+
+    inquiry = Inquiry.query.get(inquiry_id)
+    if not inquiry:
+        return jsonify({'error': 'Inquiry not found.'}), 404
+
+    data = request.get_json()
+
+    # Update fields
+    if "status" in data:
+        inquiry.status = data["status"]
+
+    try:
+        db.session.commit()
+        return jsonify(inquiry.to_dict()), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'An error occurred: {str(e)}'}), 500
+
+
+@app.delete('/api/inquiries/<int:inquiry_id>')
+@token_required
+def delete_inquiry(current_user, inquiry_id):
+    """
+    Delete an inquiry. Only accessible by admin or artist users.
+    """
+    # Ensure the user is authorized
+    if current_user.user_type not in ['admin', 'artist']:
+        return jsonify({'error': 'Access denied. Admins and artists only.'}), 403
+
+    # Fetch the inquiry
+    inquiry = Inquiry.query.get(inquiry_id)
+    if not inquiry:
+        return jsonify({'error': 'Inquiry not found.'}), 404
+
+    try:
+        # Delete the inquiry
+        db.session.delete(inquiry)
+        db.session.commit()
+        return jsonify({'message': 'Inquiry deleted successfully.'}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'An error occurred: {str(e)}'}), 500
+
+
+@app.get('/api/inquiries')
+@token_required
+def get_inquiries(current_user):
+    if current_user.user_type not in ['admin', 'artist']:
+        return jsonify({'error': 'Access denied. Admins and artists only.'}), 403
+
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 10, type=int)
+
+    inquiries_query = Inquiry.query.order_by(Inquiry.submitted_at.desc()).paginate(page=page, per_page=per_page)
+
+    return jsonify({
+        "inquiries": [inquiry.to_dict() for inquiry in inquiries_query.items],
+        "total_items": inquiries_query.total,
+        "total_pages": inquiries_query.pages,
+        "current_page": inquiries_query.page
     }), 200
 
 
