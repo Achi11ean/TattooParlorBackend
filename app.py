@@ -515,7 +515,7 @@ def get_all_artists():
     Fetch all artists.
     """
     page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 10, type=int)
+    per_page = request.args.get('per_page', 100, type=int)
 
     artists_query = Artist.query.paginate(page=page, per_page=per_page)
 
