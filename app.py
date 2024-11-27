@@ -1376,12 +1376,12 @@ def request_password_reset():
     token = serializer.dumps(user.email, salt="password-reset-salt")
     reset_link = f"http://localhost:5173/reset-password?token={token}"
 
-    # Send the email using EmailJS or a similar service
+    # Send the email
     try:
         send_email(
             recipient=user.email,
             subject="Password Reset Request",
-            body=f"Click the link to reset your password: {reset_link}"
+            reset_link=reset_link  # Pass only the link
         )
     except Exception as e:
         return jsonify({"error": "Failed to send email.", "details": str(e)}), 500
@@ -1423,26 +1423,122 @@ def reset_password():
 
 
 # Helper function to send email (simplified)
-def send_email(recipient, subject, body):
+def send_email(recipient, subject, reset_link, background_image_url=None):
     """
-    Sends an email using smtplib (simplified implementation).
-    Replace with your actual email service provider's logic.
+    Sends an email with improved styling using smtplib.
     """
     sender_email = "gottabookemall2024@gmail.com"
     sender_password = "fgwe ixae zqma nslu"
     smtp_server = "smtp.gmail.com"
     smtp_port = 587
 
-    msg = MIMEMultipart()
+    # Build the HTML body with styling
+    html_body = f"""
+    <html>
+    <head>
+        <style>
+            body {{
+                font-family: Arial, sans-serif;
+                margin: 0;
+                padding: 0;
+                color: white;
+                line-height: 1.5;
+            }}
+            .email-container {{
+                max-width: 600px;
+                margin: 20px auto;
+                padding: 20px;
+                background: rgba(0, 0, 0, 0.7); /* Semi-transparent black background */
+                border-radius: 8px;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            }}
+            .email-header {{
+                text-align: center;
+                padding: 20px;
+            }}
+            .email-header h1 {{
+                margin: 0;
+                font-size: 28px;
+                color: #fff;
+                text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+            }}
+            .email-body {{
+                background-image: url('{background_image_url or "https://images.fineartamerica.com/images-medium-large-5/dark-tree-with-moon-tim-hayes.jpg"}');
+                background-size: cover;
+                background-position: center;
+                background-repeat: no-repeat;
+                padding: 20px;
+                font-size: 16px;
+                position: relative;
+                overflow: hidden;
+            }}
+            .email-body::before {{
+                content: "";
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.6); /* Semi-transparent overlay */
+                z-index: 1;
+            }}
+            .email-body p, .email-body a {{
+                position: relative;
+                z-index: 2;
+                color: #f9f9f9; /* Ensure text color is light */
+            }}
+            .email-body a {{
+                color: #89CFF0; /* Baby blue color for links */
+                text-decoration: underline;
+                font-weight: bold;
+            }}
+            .email-footer {{
+                text-align: center;
+                font-size: 12px;
+                color: #aaaaaa;
+                margin-top: 20px;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="email-container">
+            <div class="email-header">
+                <h1>Ink Haven: Reset Your Password</h1>
+            </div>
+            <div class="email-body">
+                <p>Hello, {recipient}! We received your request to reset your password!</p>
+
+                <p>If you did not request this change, you can safely ignore this email.</p>
+                                <p>
+                    <a href="{reset_link}" target="_blank">Click here to reset your password</a>
+                </p>
+            </div>
+            <div class="email-footer">
+                <p>&copy; 2024 Tattoo Parlor. All rights reserved.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
+    # Set up the MIME structure
+    msg = MIMEMultipart("alternative")
     msg["From"] = sender_email
     msg["To"] = recipient
     msg["Subject"] = subject
-    msg.attach(MIMEText(body, "plain"))
 
-    with smtplib.SMTP(smtp_server, smtp_port) as server:
-        server.starttls()
-        server.login(sender_email, sender_password)
-        server.send_message(msg)
+    # Attach the HTML content
+    msg.attach(MIMEText(html_body, "html"))
+
+    # Send the email
+    try:
+        with smtplib.SMTP(smtp_server, smtp_port) as server:
+            server.starttls()
+            server.login(sender_email, sender_password)
+            server.send_message(msg)
+        print("Email sent successfully!")
+    except Exception as e:
+        print(f"Failed to send email: {str(e)}")
 
 
 @app.get('/api/admin-dashboard/bookings-trends')
