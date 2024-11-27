@@ -52,7 +52,7 @@ def before_request():
         return '', 204
 
     # List of public endpoints that don't require authentication
-    public_endpoints = ['signup', 'signin', 'reset_password', 'send_message', 'get_booking','get_average_rating', 'artists' ,'get_artist_by_id','get_artist_bookings','create_review','get_reviews','get_gallery', 'bookings', 'create_booking', 'get_all_galleries','create_inquiry']
+    public_endpoints = ['signup', 'signin', 'reset_password', 'get_piercings','send_message', 'get_booking', 'request_password_reset',  'delete_photo','search_piercings_by_name', 'search_bookings_by_name','search_piercings_and_bookings','get_average_rating', 'artists' ,'get_artist_by_id','get_artist_bookings','create_review','get_reviews','get_gallery', 'bookings', 'create_booking', 'get_all_galleries','create_inquiry', 'create_piercing', 'delete_booking', 'delete_piercing', 'update_piercing', 'update_booking']
     if request.endpoint in public_endpoints:
         return  # Skip token validation for public endpoints
 
@@ -179,6 +179,7 @@ def delete_artist(current_user, artist_id):
         return jsonify({'error': f'An error occurred: {str(e)}'}), 500
 
 
+
 #--------------------------------------------------------------------------------------------#
 # Booking Model
 class Booking(db.Model, SerializerMixin):
@@ -260,6 +261,7 @@ def update_booking(booking_id):
         return jsonify({'error': 'Booking not found'}), 404
 
     data = request.get_json()
+    
     if 'tattoo_style' in data:
         booking.tattoo_style = data['tattoo_style']
     if 'tattoo_size' in data:
@@ -319,6 +321,201 @@ def delete_booking(booking_id):
     db.session.delete(booking)
     db.session.commit()
     return jsonify({'message': 'Booking deleted successfully'}), 200
+
+@app.get('/api/bookings/search', endpoint='search_bookings_by_name')
+def search_bookings_by_name():
+    """
+    Search for bookings by the client's name.
+    """
+    name = request.args.get('name', "").strip()
+
+    if not name:
+        return jsonify({'error': 'Search query is required'}), 400
+
+    bookings = Booking.query.filter(Booking.name.ilike(f"%{name}%")).all()
+
+    if not bookings:
+        return jsonify({'message': 'No bookings found matching the search query.'}), 404
+
+    return jsonify([booking.to_dict() for booking in bookings]), 200
+
+#-----------------------------------------------------------------------------------------------#
+class Piercing(db.Model, SerializerMixin):
+    __tablename__ = "piercings"
+
+    id = db.Column(db.Integer, primary_key=True)
+    booking_date = db.Column(db.DateTime, default=db.func.now(), nullable=False)
+    appointment_date = db.Column(db.DateTime, nullable=False)
+    piercing_type = db.Column(db.String(50), nullable=False)  # e.g., ear, nose, belly button
+    jewelry_type = db.Column(db.String(50), nullable=False)   # e.g., stud, hoop
+    placement = db.Column(db.String(50), nullable=False)      # Specific location, e.g., "left ear lobe"
+    artist_id = db.Column(db.Integer, db.ForeignKey("artists.id", name="fk_piercing_artist"), nullable=True)
+    studio_location = db.Column(db.String(100), nullable=False)
+    price = db.Column(db.Float, nullable=False)
+    payment_status = db.Column(db.String(20), default="unpaid")
+    status = db.Column(db.String(20), default="pending")
+    name = db.Column(db.String(100), nullable=False)
+    phone_number = db.Column(db.String(15), nullable=False)
+    call_or_text_preference = db.Column(db.String(10), nullable=False)  # Choices: 'call', 'text'
+    artist = db.relationship("Artist", lazy="joined")
+
+    serialize_rules = ("-artist.piercings",)
+
+    def to_dict(self):
+        print(f"Formatting booking_date: {self.booking_date}")
+        print(f"Formatting appointment_date: {self.appointment_date}")
+        
+        piercing_dict = super().to_dict()
+        piercing_dict["booking_date"] = format_datetime(self.booking_date)
+        piercing_dict["appointment_date"] = format_datetime(self.appointment_date)
+        print(f"Formatted dictionary: {piercing_dict}")
+        return piercing_dict
+
+@app.post('/api/piercings', endpoint='create_piercing')
+def create_piercing():
+    data = request.get_json()
+    piercing_type = data.get('piercing_type')
+    jewelry_type = data.get('jewelry_type')
+    placement = data.get('placement')
+    studio_location = data.get('studio_location')
+    appointment_date = data.get('appointment_date')
+    price = data.get('price')
+    name = data.get('name')
+    phone_number = data.get('phone_number')
+    call_or_text_preference = data.get('call_or_text_preference')
+    artist_id = data.get('artist_id')  # Add artist_id
+
+    if not all([piercing_type, jewelry_type, placement, studio_location, appointment_date, price, name, phone_number, call_or_text_preference]):
+        return jsonify({'error': 'All fields are required'}), 400
+
+    try:
+        appointment_date_obj = datetime.strptime(appointment_date, '%A, %B %d, %Y %I:%M %p')
+        if appointment_date_obj <= datetime.now():
+            return jsonify({'error': 'Appointment date must be in the future'}), 400
+    except ValueError:
+        return jsonify({'error': 'Invalid date format. Use "Thursday, April 1, 2024 5:00 PM".'}), 400
+
+    new_piercing = Piercing(
+        piercing_type=piercing_type,
+        jewelry_type=jewelry_type,
+        placement=placement,
+        studio_location=studio_location,
+        appointment_date=appointment_date_obj,
+        price=price,
+        name=name,
+        phone_number=phone_number,
+        call_or_text_preference=call_or_text_preference,
+                artist_id=artist_id  # Include artist_id
+
+    )
+
+    db.session.add(new_piercing)
+    db.session.commit()
+    return jsonify(new_piercing.to_dict()), 201
+
+
+@app.get('/api/piercings', endpoint='get_piercings')
+def get_piercings():
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 10, type=int)
+
+    piercings = Piercing.query.paginate(page=page, per_page=per_page)
+
+    return jsonify({
+        "piercings": [piercing.to_dict() for piercing in piercings.items],
+        "total_items": piercings.total,
+        "total_pages": piercings.pages,
+        "current_page": piercings.page
+    }), 200
+
+@app.get('/api/piercings/<int:piercing_id>',  endpoint='get_piercing')
+def get_piercing(piercing_id):
+
+
+    piercing = Piercing.query.get(piercing_id)
+    if not piercing:
+        return jsonify({'error': 'Piercing not found'}), 404
+    return jsonify(piercing.to_dict()), 200
+
+
+@app.patch('/api/piercings/<int:piercing_id>')
+def update_piercing(piercing_id):
+
+
+
+    piercing = Piercing.query.get(piercing_id)
+    if not piercing:
+        return jsonify({'error': 'Piercing not found'}), 404
+
+    data = request.get_json()
+    if 'piercing_type' in data:
+        piercing.piercing_type = data['piercing_type']
+    if 'jewelry_type' in data:
+        piercing.jewelry_type = data['jewelry_type']
+    if 'placement' in data:
+        piercing.placement = data['placement']
+    if 'studio_location' in data:
+        piercing.studio_location = data['studio_location']
+    if 'appointment_date' in data:
+        try:
+            appointment_date_obj = datetime.strptime(data['appointment_date'], '%A, %B %d, %Y %I:%M %p')
+            if appointment_date_obj <= datetime.now():
+                return jsonify({'error': 'Appointment date must be in the future'}), 400
+            piercing.appointment_date = appointment_date_obj
+        except ValueError:
+            return jsonify({'error': 'Invalid date format. Use "Thursday, April 1, 2024 5:00 PM".'}), 400
+    if 'price' in data:
+        piercing.price = data['price']
+    if 'payment_status' in data:
+        piercing.payment_status = data['payment_status']
+    if 'status' in data:
+        piercing.status = data['status']
+    if 'artist_id' in data:  # Validate and update the artist_id if provided
+        artist_id = data['artist_id']
+        artist = Artist.query.get(artist_id)
+        if not artist:
+            return jsonify({'error': 'Artist not found'}), 404
+        piercing.artist_id = artist_id
+    if 'name' in data:
+        piercing.name = data['name']
+    if 'phone_number' in data:
+        piercing.phone_number = data['phone_number']
+    if 'call_or_text_preference' in data:
+        if data['call_or_text_preference'] not in ['call', 'text']:
+            return jsonify({'error': 'Invalid preference. Choose "call" or "text".'}), 400
+        piercing.call_or_text_preference = data['call_or_text_preference']
+
+    db.session.commit()
+    return jsonify(piercing.to_dict()), 200
+
+@app.delete('/api/piercings/<int:piercing_id>')
+def delete_piercing(piercing_id):
+
+    piercing = Piercing.query.get(piercing_id)
+    if not piercing:
+        return jsonify({'error': 'Piercing not found'}), 404
+
+    db.session.delete(piercing)
+    db.session.commit()
+    return jsonify({'message': 'Piercing deleted successfully'}), 200
+
+
+@app.get('/api/piercings/search', endpoint='search_piercings_by_name')
+def search_piercings_by_name():
+    """
+    Search for piercings by the client's name.
+    """
+    name = request.args.get('name', "").strip()
+
+    if not name:
+        return jsonify({'error': 'Search query is required'}), 400
+
+    piercings = Piercing.query.filter(Piercing.name.ilike(f"%{name}%")).all()
+
+    if not piercings:
+        return jsonify({'message': 'No piercings found matching the search query.'}), 404
+
+    return jsonify([piercing.to_dict() for piercing in piercings]), 200
 
 #--------------------------------------------------------------------------------------------#
 # Artist Model
@@ -821,7 +1018,6 @@ def get_all_galleries():
     }), 200
 
 @app.delete('/api/gallery/<int:photo_id>')
-@token_required
 def delete_photo(photo_id):
     photo = Gallery.query.get(photo_id)
     if not photo:
@@ -1095,7 +1291,7 @@ def admin_dashboard(current_user):  # Add current_user parameter
     # Platform Metrics
     total_bookings = Booking.query.count()
     total_earnings = db.session.query(func.sum(Booking.price)).scalar() or 0
-    average_rating = db.session.query(func.avg(Artist.average_rating)).scalar() or 0
+    average_rating = db.session.query(func.avg(Review.star_rating)).scalar() or 0
 
     platform_metrics = {
         'total_bookings': total_bookings,
@@ -1113,6 +1309,52 @@ def admin_dashboard(current_user):  # Add current_user parameter
 
     return jsonify(dashboard_data), 200
 
+@app.patch('/api/users/<int:user_id>')
+@token_required
+def update_user(current_user, user_id):
+    """
+    Update a user's details. Only admins or the user themselves can update their details.
+    """
+    # Fetch the user
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    # Check permissions: Only the user or an admin can edit
+    if current_user.user_type != 'admin' and current_user.id != user.id:
+        return jsonify({'error': 'Unauthorized access'}), 403
+
+    # Parse the request data
+    data = request.get_json()
+
+    # Update fields if provided
+    if 'username' in data:
+        if User.query.filter(User.username == data['username'], User.id != user.id).first():
+            return jsonify({'error': 'Username already exists.'}), 400
+        user.username = data['username']
+    if 'email' in data:
+        if User.query.filter(User.email == data['email'], User.id != user.id).first():
+            return jsonify({'error': 'Email already exists.'}), 400
+        user.email = data['email']
+    if 'password' in data:
+        try:
+            validate_password(data['password'])  # Validate password strength
+            user.password = data['password']
+        except Exception as e:
+            return jsonify({'error': str(e)}), 400
+    if 'user_type' in data:
+        if current_user.user_type != 'admin':  # Only admins can change user type
+            return jsonify({'error': 'Only admins can change user type.'}), 403
+        if data['user_type'] not in ['artist', 'admin']:
+            return jsonify({'error': 'Invalid user type.'}), 400
+        user.user_type = data['user_type']
+
+    try:
+        db.session.commit()
+        return jsonify({'message': 'User updated successfully.', 'user': user.to_dict()}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'An error occurred: {str(e)}'}), 500
 
 
 @app.post('/api/request-password-reset')
@@ -1132,7 +1374,7 @@ def request_password_reset():
 
     # Generate a secure token
     token = serializer.dumps(user.email, salt="password-reset-salt")
-    reset_link = f"http://yourfrontend.com/reset-password?token={token}"
+    reset_link = f"http://localhost:5173/reset-password?token={token}"
 
     # Send the email using EmailJS or a similar service
     try:
@@ -1187,7 +1429,7 @@ def send_email(recipient, subject, body):
     Replace with your actual email service provider's logic.
     """
     sender_email = "gottabookemall2024@gmail.com"
-    sender_password = "your-email-password"
+    sender_password = "fgwe ixae zqma nslu"
     smtp_server = "smtp.gmail.com"
     smtp_port = 587
 
