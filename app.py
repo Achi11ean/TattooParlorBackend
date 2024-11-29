@@ -1423,14 +1423,24 @@ def reset_password():
 
 
 # Helper function to send email (simplified)
+import os
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
 def send_email(recipient, subject, reset_link, background_image_url=None):
     """
     Sends an email with improved styling using smtplib.
     """
-    sender_email = "gottabookemall2024@gmail.com"
-    sender_password = "fgwe ixae zqma nslu"
-    smtp_server = "smtp.gmail.com"
-    smtp_port = 587
+    # Get environment variables
+    sender_email = os.getenv('EMAIL_ADDRESS')
+    sender_password = os.getenv('EMAIL_PASSWORD')
+    smtp_server = os.getenv('SMTP_SERVER')
+    smtp_port = int(os.getenv('SMTP_PORT', 587))  # Default to 587 if not provided
+
+    # Check if essential environment variables are set
+    if not all([sender_email, sender_password, smtp_server, smtp_port]):
+        raise ValueError("Missing email configuration in environment variables.")
 
     # Build the HTML body with styling
     html_body = f"""
@@ -1506,7 +1516,7 @@ def send_email(recipient, subject, reset_link, background_image_url=None):
                 <h1>Ink Haven: Reset Your Password</h1>
             </div>
             <div class="email-body">
-                <p>Hello, {recipient}! We received your request to reset your password!</p>
+                <p>Hello! We received your request to reset your password!</p>
 
                 <p>If you did not request this change, you can safely ignore this email.</p>
                                 <p>
@@ -1533,9 +1543,10 @@ def send_email(recipient, subject, reset_link, background_image_url=None):
     # Send the email
     try:
         with smtplib.SMTP(smtp_server, smtp_port) as server:
-            server.starttls()
-            server.login(sender_email, sender_password)
-            server.send_message(msg)
+            server.ehlo()  # Identify with the server
+            server.starttls()  # Upgrade connection to TLS
+            server.login(sender_email, sender_password)  # Authenticate
+            server.send_message(msg)  # Send the email
         print("Email sent successfully!")
     except Exception as e:
         print(f"Failed to send email: {str(e)}")
