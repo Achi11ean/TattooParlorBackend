@@ -32,9 +32,9 @@ SECRET_KEY = "your_secret_key"  # Use a secure value here (e.g., from an environ
 app = Flask(__name__)
 bcrypt = Bcrypt(app)
 serializer = URLSafeTimedSerializer(SECRET_KEY)
-CORS(app, supports_credentials=True, origins=["http://localhost:5173", "http://127.0.0.1:5173"], allow_headers=["Content-Type", "Authorization"])
+CORS(app, supports_credentials=True, origins=["http://localhost:5173", "http://127.0.0.1:5173", "https://jwhitproductionstattooparlor.netlify.app/"], allow_headers=["Content-Type", "Authorization"])
 
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///tattoo.db'  # Change to your database
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URI')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)

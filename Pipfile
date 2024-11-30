@@ -16,6 +16,8 @@ flask-bcrypt = "*"
 flask-cors = "*"
 pyjwt = "*"
 apscheduler = "*"
+psycopg2-binary = "*"
+email-validator = "*"
 
 [dev-packages]
 

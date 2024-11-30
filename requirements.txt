@@ -12,3 +12,6 @@ python-dotenv
 APScheduler
 SQLAlchemy==2.0.18
 itsdangerous==2.1.2
+psycopg2-binary
+email-validator
+gunicorn
