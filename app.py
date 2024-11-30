@@ -1724,7 +1724,7 @@ def get_or_create_global_setting(key):
     return jsonify({key: setting.value == "true"}), 200
 
 
-@app.route('/api/global-settings/<string:key>', methods=['PATCH'], endpoint='show_create_artist_button')
+@app.route('/api/global-settings/<string:key>', methods=['PATCH'])
 def update_global_setting(key):
     """
     Update the value of a global setting by its key.
