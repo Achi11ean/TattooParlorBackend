@@ -52,7 +52,7 @@ def before_request():
         return '', 204
 
     # List of public endpoints that don't require authentication
-    public_endpoints = ['signup', 'signin', 'reset_password', 'get_piercings','send_message', 'get_booking', 'request_password_reset',  'delete_photo','search_piercings_by_name', 'search_bookings_by_name','search_piercings_and_bookings','get_average_rating', 'artists' ,'get_artist_by_id','get_artist_bookings','create_review','get_reviews','get_gallery', 'bookings', 'create_booking', 'get_all_galleries','create_inquiry', 'create_piercing', 'delete_booking', 'delete_piercing', 'update_piercing', 'update_booking']
+    public_endpoints = ['signup', 'signin', 'reset_password', 'get_piercings','send_message', 'get_booking', 'request_password_reset',  'delete_photo','search_piercings_by_name', 'search_bookings_by_name','search_piercings_and_bookings','get_average_rating', 'artists' ,'get_artist_by_id','get_artist_bookings','create_review','get_reviews','get_gallery', 'bookings', 'create_booking', 'get_all_galleries', 'show_create_artist_button','create_inquiry', 'create_piercing', 'delete_booking', 'delete_piercing', 'update_piercing', 'update_booking']
     if request.endpoint in public_endpoints:
         return  # Skip token validation for public endpoints
 
@@ -1416,10 +1416,12 @@ def reset_password():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-    user.password = new_password
+    # Hash the password before saving
+    user.password = bcrypt.generate_password_hash(new_password).decode('utf-8')
     db.session.commit()
 
     return jsonify({"message": "Password reset successfully."}), 200
+
 
 
 # Helper function to send email (simplified)
@@ -1473,7 +1475,7 @@ def send_email(recipient, subject, reset_link, background_image_url=None):
                 text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
             }}
             .email-body {{
-                background-image: url('{background_image_url or "https://images.fineartamerica.com/images-medium-large-5/dark-tree-with-moon-tim-hayes.jpg"}');
+                background-image: url('{background_image_url or "https://img.freepik.com/premium-photo/strategic-email-marketing-campaign-pink-envelope-background_952286-14040.jpg"}');
                 background-size: cover;
                 background-position: center;
                 background-repeat: no-repeat;
@@ -1516,7 +1518,7 @@ def send_email(recipient, subject, reset_link, background_image_url=None):
                 <h1>Ink Haven: Reset Your Password</h1>
             </div>
             <div class="email-body">
-                <p>Hello! We received your request to reset your password!</p>
+                <p>Hello {recipient}! We received your request to reset your password!</p>
 
                 <p>If you did not request this change, you can safely ignore this email.</p>
                                 <p>
@@ -1699,6 +1701,50 @@ def get_inquiries(current_user):
         "total_pages": inquiries_query.pages,
         "current_page": inquiries_query.page
     }), 200
+#----------------------------------------
+class GlobalSettings(db.Model, SerializerMixin):
+    __tablename__ = "global_settings"
+
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String(50), unique=True, nullable=False)
+    value = db.Column(db.String(50), nullable=False, default=False)
+@app.route('/api/global-settings/<string:key>', methods=['GET'])
+def get_or_create_global_setting(key):
+    """
+    Fetch the value of a global setting by its key, creating it with a default value if it doesn't exist.
+    """
+    setting = GlobalSettings.query.filter_by(key=key).first()
+    if not setting:
+        setting = GlobalSettings(key=key, value="false")  # Default value
+        db.session.add(setting)
+        db.session.commit()
+
+    return jsonify({key: setting.value == "true"}), 200
+
+
+@app.route('/api/global-settings/<string:key>', methods=['PATCH'], endpoint='show_create_artist_button')
+def update_global_setting(key):
+    """
+    Update the value of a global setting by its key.
+    """
+    # Parse request data
+    data = request.get_json()
+    new_value = data.get("value")
+
+    if new_value is None:
+        return jsonify({'error': 'New value is required.'}), 400
+
+    # Retrieve or create the setting
+    setting = GlobalSettings.query.filter_by(key=key).first()
+    if not setting:
+        setting = GlobalSettings(key=key, value="false")  # Default value
+        db.session.add(setting)
+
+    # Update the value
+    setting.value = "true" if bool(new_value) else "false"
+    db.session.commit()
+
+    return jsonify({'message': 'Setting updated successfully.', key: setting.value == "true"}), 200
 
 
 if __name__ == "__main__":
