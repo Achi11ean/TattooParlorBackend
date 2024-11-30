@@ -1570,14 +1570,16 @@ def monthly_booking_trends(current_user):  # Add current_user parameter
         extract('month', Booking.appointment_date)
     ).order_by('month').all()
 
+    # Ensure `month` is cast to int
     monthly_trends = [
-        {'month': calendar.month_name[month], 'total_bookings': total} 
+        {'month': calendar.month_name[int(month)], 'total_bookings': total} 
         for month, total in trends
     ]
     return jsonify({
         'year': current_year,
         'monthly_trends': monthly_trends
     }), 200
+
 #------------------------------------------------------------------------------------inquiries#
 
 class Inquiry(db.Model, SerializerMixin):
