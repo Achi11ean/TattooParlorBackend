@@ -364,6 +364,7 @@ class Piercing(db.Model, SerializerMixin):
         piercing_dict = super().to_dict()
         piercing_dict["booking_date"] = format_datetime(self.booking_date)
         piercing_dict["appointment_date"] = format_datetime(self.appointment_date)
+        print(f"Formatted dictionary: {piercing_dict}")
         return piercing_dict
 
 @app.post('/api/piercings', endpoint='create_piercing')
@@ -1572,7 +1573,9 @@ def send_email(recipient, subject, reset_link, background_image_url=None):
             server.starttls()  # Upgrade connection to TLS
             server.login(sender_email, sender_password)  # Authenticate
             server.send_message(msg)  # Send the email
+        print("Email sent successfully!")
     except Exception as e:
+        print(f"Failed to send email: {str(e)}")
 
 
 @app.get('/api/admin-dashboard/bookings-trends')
