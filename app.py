@@ -204,13 +204,10 @@ class Booking(db.Model, SerializerMixin):
     serialize_rules = ("-artist.bookings",)
 
     def to_dict(self):
-        print(f"Formatting booking_date: {self.booking_date}")
-        print(f"Formatting appointment_date: {self.appointment_date}")
-        
+
         booking_dict = super().to_dict()
         booking_dict["booking_date"] = format_datetime(self.booking_date)
         booking_dict["appointment_date"] = format_datetime(self.appointment_date)
-        print(f"Formatted dictionary: {booking_dict}")
         return booking_dict
 
 @app.post('/api/bookings', endpoint='create_booking')
@@ -362,13 +359,11 @@ class Piercing(db.Model, SerializerMixin):
     serialize_rules = ("-artist.piercings",)
 
     def to_dict(self):
-        print(f"Formatting booking_date: {self.booking_date}")
-        print(f"Formatting appointment_date: {self.appointment_date}")
+
         
         piercing_dict = super().to_dict()
         piercing_dict["booking_date"] = format_datetime(self.booking_date)
         piercing_dict["appointment_date"] = format_datetime(self.appointment_date)
-        print(f"Formatted dictionary: {piercing_dict}")
         return piercing_dict
 
 @app.post('/api/piercings', endpoint='create_piercing')
@@ -1269,7 +1264,7 @@ def admin_dashboard(current_user):  # Add current_user parameter
 
         performance_metrics = {
             'total_bookings': Booking.query.filter_by(artist_id=artist.id).count(),
-            'total_piercings': Piercing.query.all(),
+            'total_piercings': Piercing.query.filter_by(artist_id=artist.id).count(),
             'total_earnings': (
                 db.session.query(func.sum(Booking.price)).filter_by(artist_id=artist.id).scalar() or 0
             ) + (
@@ -1284,8 +1279,6 @@ def admin_dashboard(current_user):  # Add current_user parameter
             'recent_reviews': [review.to_dict() for review in recent_reviews],
             'performance_metrics': performance_metrics,
         }
-        print("Total Bookings:", Booking.query.count())
-        print("Total Piercings:", Piercing.query.count())
 
     # All Users
     users = User.query.all()
@@ -1294,7 +1287,6 @@ def admin_dashboard(current_user):  # Add current_user parameter
     # All Bookings
     bookings = Booking.query.options(joinedload(Booking.artist)).all()
     piercings = Piercing.query.options(joinedload(Piercing.artist)).all()
-    print("Piercings fetched:", [piercing.to_dict() for piercing in piercings])
     all_appointments = [
         {
             **booking.to_dict(),
@@ -1305,7 +1297,7 @@ def admin_dashboard(current_user):  # Add current_user parameter
     ] + [
         {
             **piercing.to_dict(),
-            'artist_name': None,
+            'artist_name': piercing.artist.name if piercing.artist else None,
             'type': 'piercing',
         }
         for piercing in piercings
@@ -1580,9 +1572,7 @@ def send_email(recipient, subject, reset_link, background_image_url=None):
             server.starttls()  # Upgrade connection to TLS
             server.login(sender_email, sender_password)  # Authenticate
             server.send_message(msg)  # Send the email
-        print("Email sent successfully!")
     except Exception as e:
-        print(f"Failed to send email: {str(e)}")
 
 
 @app.get('/api/admin-dashboard/bookings-trends')
