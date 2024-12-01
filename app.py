@@ -1269,7 +1269,7 @@ def admin_dashboard(current_user):  # Add current_user parameter
 
         performance_metrics = {
             'total_bookings': Booking.query.filter_by(artist_id=artist.id).count(),
-            'total_piercings': Piercing.query.filter_by(artist_id=artist.id).count(),
+            'total_piercings': Piercing.query.all(),
             'total_earnings': (
                 db.session.query(func.sum(Booking.price)).filter_by(artist_id=artist.id).scalar() or 0
             ) + (
@@ -1284,6 +1284,8 @@ def admin_dashboard(current_user):  # Add current_user parameter
             'recent_reviews': [review.to_dict() for review in recent_reviews],
             'performance_metrics': performance_metrics,
         }
+        print("Total Bookings:", Booking.query.count())
+        print("Total Piercings:", Piercing.query.count())
 
     # All Users
     users = User.query.all()
@@ -1303,7 +1305,7 @@ def admin_dashboard(current_user):  # Add current_user parameter
     ] + [
         {
             **piercing.to_dict(),
-            'artist_name': piercing.artist.name if piercing.artist else None,
+            'artist_name': None,
             'type': 'piercing',
         }
         for piercing in piercings
