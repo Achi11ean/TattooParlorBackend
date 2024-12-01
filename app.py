@@ -364,7 +364,6 @@ class Piercing(db.Model, SerializerMixin):
         piercing_dict = super().to_dict()
         piercing_dict["booking_date"] = format_datetime(self.booking_date)
         piercing_dict["appointment_date"] = format_datetime(self.appointment_date)
-        print(f"Formatted dictionary: {piercing_dict}")
         return piercing_dict
 
 @app.post('/api/piercings', endpoint='create_piercing')
