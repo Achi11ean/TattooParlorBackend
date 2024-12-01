@@ -1254,22 +1254,33 @@ def admin_dashboard(current_user):  # Add current_user parameter
     artist = Artist.query.filter_by(created_by=current_user.id).first()
     personal_data = None
     if artist:
-        # Fetch personal bookings, reviews, and performance metrics
+        # Fetch personal bookings, piercings, reviews, and performance metrics
         upcoming_bookings = Booking.query.filter(
             Booking.artist_id == artist.id,
             Booking.appointment_date > datetime.now()
         ).order_by(Booking.appointment_date).limit(5).all()
-        
+
+        upcoming_piercings = Piercing.query.filter(
+            Piercing.artist_id == artist.id,
+            Piercing.appointment_date > datetime.now()
+        ).order_by(Piercing.appointment_date).limit(5).all()
+
         recent_reviews = Review.query.filter_by(artist_id=artist.id).order_by(Review.created_at.desc()).limit(5).all()
-        
+
         performance_metrics = {
             'total_bookings': Booking.query.filter_by(artist_id=artist.id).count(),
-            'total_earnings': db.session.query(func.sum(Booking.price)).filter_by(artist_id=artist.id).scalar() or 0,
+            'total_piercings': Piercing.query.filter_by(artist_id=artist.id).count(),
+            'total_earnings': (
+                db.session.query(func.sum(Booking.price)).filter_by(artist_id=artist.id).scalar() or 0
+            ) + (
+                db.session.query(func.sum(Piercing.price)).filter_by(artist_id=artist.id).scalar() or 0
+            ),
         }
-        
+
         personal_data = {
             'artist_details': artist.to_dict(),
             'upcoming_bookings': [booking.to_dict() for booking in upcoming_bookings],
+            'upcoming_piercings': [piercing.to_dict() for piercing in upcoming_piercings],
             'recent_reviews': [review.to_dict() for review in recent_reviews],
             'performance_metrics': performance_metrics,
         }
@@ -1280,21 +1291,38 @@ def admin_dashboard(current_user):  # Add current_user parameter
 
     # All Bookings
     bookings = Booking.query.options(joinedload(Booking.artist)).all()
-    all_bookings = [
+    piercings = Piercing.query.options(joinedload(Piercing.artist)).all()
+    print("Piercings fetched:", [piercing.to_dict() for piercing in piercings])
+    all_appointments = [
         {
             **booking.to_dict(),
-            'artist_name': booking.artist.name if booking.artist else None
+            'artist_name': booking.artist.name if booking.artist else None,
+            'type': 'booking',
         }
         for booking in bookings
+    ] + [
+        {
+            **piercing.to_dict(),
+            'artist_name': piercing.artist.name if piercing.artist else None,
+            'type': 'piercing',
+        }
+        for piercing in piercings
     ]
 
     # Platform Metrics
     total_bookings = Booking.query.count()
-    total_earnings = db.session.query(func.sum(Booking.price)).scalar() or 0
+    total_piercings = Piercing.query.count()
+    total_earnings = (
+        db.session.query(func.sum(Booking.price)).scalar() or 0
+    ) + (
+        db.session.query(func.sum(Piercing.price)).scalar() or 0
+    )
     average_rating = db.session.query(func.avg(Review.star_rating)).scalar() or 0
 
     platform_metrics = {
         'total_bookings': total_bookings,
+        'total_piercings': total_piercings,
+        'total_appointments': total_bookings + total_piercings,
         'total_earnings': total_earnings,
         'average_rating': round(average_rating, 2),
     }
@@ -1303,11 +1331,12 @@ def admin_dashboard(current_user):  # Add current_user parameter
     dashboard_data = {
         'personal_data': personal_data,
         'users': all_users,
-        'bookings': all_bookings,
+        'appointments': all_appointments,
         'platform_metrics': platform_metrics,
     }
 
     return jsonify(dashboard_data), 200
+
 
 @app.patch('/api/users/<int:user_id>')
 @token_required
