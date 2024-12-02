@@ -1916,6 +1916,8 @@ def delete_newsletter(newsletter_id):
 
 #--------------------------------------------------------------------------------------------------------
 class Subscriber(db.Model):
+    __tablename__ = "subscribers"  # Ensure this matches the actual table name
+
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(255), nullable=False)
     subscribed_at = db.Column(db.DateTime, nullable=False, default=db.func.now())
