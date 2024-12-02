@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 import json
 from flask_session import Session
 import pytz
+from collections import defaultdict
 
 from flask_bcrypt import Bcrypt
 from functools import wraps
