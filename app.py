@@ -2049,7 +2049,7 @@ def get_subscriber_metrics():
             return data
 
         # Convert query results into dictionaries
-        new_subscribers_by_month = build_monthly_data(new_subscribers)
+        new_subscribers_by_month = defaultdict(int, build_monthly_data(new_subscribers))
         unsubscribes_by_month = build_monthly_data(unsubscribes)
         print(f"New Subscribers by Month: {new_subscribers_by_month}")  # Debug: Processed new subscribers
         print(f"Unsubscribes by Month: {unsubscribes_by_month}") 
@@ -2066,6 +2066,11 @@ def get_subscriber_metrics():
         net_subscriptions = sum(monthly_new_subscribers) - sum(monthly_unsubscribes)
         trend = "positive" if net_subscriptions > 0 else "negative" if net_subscriptions < 0 else "neutral"
         print(f"Net Subscriptions: {net_subscriptions}, Trend: {trend}")  # Debug: Overall trend
+        print("Months:", months)
+        print("New Subscribers by Month:", new_subscribers_by_month)
+        print("Unsubscribes by Month:", unsubscribes_by_month)
+        print("Monthly New Subscribers:", monthly_new_subscribers)
+        print("Monthly Unsubscribes:", monthly_unsubscribes)
 
         return jsonify({
             "total_new_subscribers": sum(monthly_new_subscribers),
