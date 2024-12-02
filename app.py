@@ -52,7 +52,7 @@ def before_request():
         return '', 204
 
     # List of public endpoints that don't require authentication
-    public_endpoints = ['signup', 'signin', 'reset_password', 'get_piercings','send_message', 'get_booking', 'request_password_reset',  'delete_photo','search_piercings_by_name', 'search_bookings_by_name','search_piercings_and_bookings','get_average_rating', 'artists' ,'get_artist_by_id','get_artist_bookings','create_review','get_reviews','get_gallery', 'bookings', 'create_booking', 'get_all_galleries', 'show_create_artist_button','create_inquiry', 'create_piercing', 'delete_booking', 'delete_piercing', 'update_piercing', 'update_booking', 'get_or_create_global_setting','subscribe', 'get_newsletters', 'delete_newsletter','create_newsletter', 'get_subscribers', 'unsubscribe']
+    public_endpoints = ['signup', 'signin', 'reset_password', 'get_piercings','send_message', 'get_booking', 'request_password_reset',  'delete_photo','search_piercings_by_name', 'search_bookings_by_name','search_piercings_and_bookings','get_average_rating', 'artists' ,'get_artist_by_id','get_artist_bookings','create_review','get_reviews','get_gallery', 'bookings', 'create_booking', 'get_all_galleries', 'show_create_artist_button','create_inquiry', 'create_piercing', 'delete_booking', 'delete_piercing', 'update_piercing', 'update_booking', 'get_or_create_global_setting','subscribe', 'get_newsletters', 'delete_newsletter','create_newsletter', 'get_subscribers', 'unsubscribe', 'metrics/subscribers']
     if request.endpoint in public_endpoints:
         return  # Skip token validation for public endpoints
 
@@ -1941,18 +1941,28 @@ def subscribe():
     data = request.get_json()
     email = data.get('email')
 
+    # Validate the email format
     if not email or not re.match(r"[^@]+@[^@]+\.[^@]+", email):
         return jsonify({"error": "Invalid email format"}), 400
 
-    if Subscriber.query.filter_by(email=email).first():
-        return jsonify({"error": "This email is already subscribed"}), 400
+    # Check if the subscriber already exists
+    subscriber = Subscriber.query.filter_by(email=email).first()
+    if subscriber:
+        if subscriber.is_active:
+            return jsonify({"error": "This email is already subscribed"}), 400
+        else:
+            # Reactivate the existing subscription
+            subscriber.is_active = True
+            subscriber.subscribed_at = db.func.now()  # Update the subscription date
+            db.session.commit()
+            return jsonify({"message": "Subscription reactivated successfully", "subscriber": subscriber.to_dict()}), 200
 
-    subscriber = Subscriber(email=email)
-    db.session.add(subscriber)
+    # Create a new subscriber if it doesn't exist
+    new_subscriber = Subscriber(email=email)
+    db.session.add(new_subscriber)
     db.session.commit()
 
-    return jsonify({"message": "Subscription successful", "subscriber": subscriber.to_dict()}), 201
-
+    return jsonify({"message": "Subscription successful", "subscriber": new_subscriber.to_dict()}), 201
 
 @app.get('/api/subscribers')
 def get_subscribers():
