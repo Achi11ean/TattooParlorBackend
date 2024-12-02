@@ -2041,11 +2041,12 @@ def get_subscriber_metrics():
         ).group_by('year', 'month').all()
         print(f"Unsubscribes Raw Data: {unsubscribes}")  # Debug: Unsubscribes query results
 
-        # Helper function to convert query results into a dictionary keyed by year-month
         def build_monthly_data(query_results):
             data = defaultdict(int)
             for year, month, count in query_results:
-                data[f"{int(year)}-{int(month):02d}"] = count
+                key = f"{int(year)}-{int(month):02d}"
+                data[key] = count
+                print(f"Processed Data - Key: {key}, Count: {count}")  # Debug
             return data
 
         # Convert query results into dictionaries
