@@ -1898,6 +1898,19 @@ def get_newsletters():
         "current_page": paginated_newsletters.page
     }), 200
 
+@app.delete('/api/newsletters/<int:newsletter_id>')
+def delete_newsletter(newsletter_id):
+    # Find the newsletter by its ID
+    newsletter = Newsletter.query.get(newsletter_id)
+    
+    if not newsletter:
+        return jsonify({"error": "Newsletter not found"}), 404
+
+    # Delete the newsletter
+    db.session.delete(newsletter)
+    db.session.commit()
+
+    return jsonify({"message": f"Newsletter with ID {newsletter_id} deleted successfully"}), 200
 
 
 
