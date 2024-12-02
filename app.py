@@ -1784,6 +1784,9 @@ def send_newsletter_email(recipient, subject, body, background_image_url=None):
     if not all([sender_email, sender_password, smtp_server, smtp_port]):
         raise ValueError("Missing email configuration in environment variables.")
 
+    # Add a personalized greeting to the email body
+    personalized_body = f"Hello {recipient},\n\n{body}"
+
     # Build the HTML body with inline styles and simplified structure
     html_body = f"""
     <html>
@@ -1796,6 +1799,7 @@ def send_newsletter_email(recipient, subject, body, background_image_url=None):
             </tr>
             <tr>
                 <td style="padding: 20px; text-align: left; font-size: 16px; color: #333;">
+                    <p style="margin: 0 0 20px;">Hello {recipient},</p>
                     <p style="margin: 0 0 20px;">{body}</p>
                     {f"<img src='{background_image_url}' alt='Newsletter Image' style='max-width: 100%; height: auto; display: block; margin: 10px 0;'>" if background_image_url else ""}
                 </td>
@@ -1817,7 +1821,7 @@ def send_newsletter_email(recipient, subject, body, background_image_url=None):
     msg["Reply-To"] = sender_email
 
     # Attach the plain text version as a fallback
-    text_body = f"{subject}\n\n{body}\n\n© 2024 Tattoo Parlor. All rights reserved."
+    text_body = f"{subject}\n\nHello {recipient},\n\n{body}\n\n© 2024 Tattoo Parlor. All rights reserved."
     msg.attach(MIMEText(text_body, "plain"))
     msg.attach(MIMEText(html_body, "html"))
 
@@ -1830,7 +1834,6 @@ def send_newsletter_email(recipient, subject, body, background_image_url=None):
         print(f"Newsletter sent successfully to {recipient}")
     except Exception as e:
         print(f"Failed to send newsletter to {recipient}: {str(e)}")
-
 
 
 class Newsletter(db.Model, SerializerMixin):
