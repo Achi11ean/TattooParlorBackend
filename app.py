@@ -35,10 +35,7 @@ bcrypt = Bcrypt(app)
 serializer = URLSafeTimedSerializer(SECRET_KEY)
 CORS(app, supports_credentials=True, origins=["http://localhost:5173", "http://127.0.0.1:5173", "https://jwhitproductionstattooparlor.netlify.app"], allow_headers=["Content-Type", "Authorization"])
 
-if os.getenv('FLASK_ENV') == 'production':
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URI')  # Use the deployed database
-else:
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///local.db'  # Use a local SQLite databaseapp.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URI')  # Use the deployed database
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 
