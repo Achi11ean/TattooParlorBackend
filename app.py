@@ -1954,6 +1954,24 @@ def subscribe():
     return jsonify({"message": "Subscription successful", "subscriber": subscriber.to_dict()}), 201
 
 
+@app.get('/api/subscribers')
+def get_subscribers():
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 10, type=int)
+    search_query = request.args.get('search', '', type=str)
+
+    query = Subscriber.query
+
+    if search_query:
+        query = query.filter(Subscriber.email.ilike(f"%{search_query}%"))
+
+    paginated_subscribers = query.paginate(page=page, per_page=per_page, error_out=False)
+
+    return jsonify({
+        "subscribers": [subscriber.to_dict() for subscriber in paginated_subscribers.items],
+        "current_page": paginated_subscribers.page,
+        "total_pages": paginated_subscribers.pages
+    }), 200
 
 
 
