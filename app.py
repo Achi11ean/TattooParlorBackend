@@ -2010,19 +2010,9 @@ def unsubscribe():
 @app.get('/api/metrics/subscribers')
 def get_subscriber_metrics():
     try:
-        # Get the date range from query parameters
-        start_date = request.args.get('start_date')
-        end_date = request.args.get('end_date')
-
-        if not start_date or not end_date:
-            return jsonify({"error": "start_date and end_date are required"}), 400
-
-        # Parse the dates
-        try:
-            start_date = datetime.strptime(start_date, '%Y-%m-%d')
-            end_date = datetime.strptime(end_date, '%Y-%m-%d')
-        except ValueError:
-            return jsonify({"error": "Invalid date format. Use YYYY-MM-DD."}), 400
+        # Calculate the start and end dates for the last 12 months
+        end_date = datetime.utcnow()
+        start_date = end_date - timedelta(days=365)  # 12 months ago
 
         # Count active subscribers within the date range
         new_subscribers_count = db.session.query(func.count(Subscriber.id)) \
@@ -2041,6 +2031,20 @@ def get_subscriber_metrics():
         # Calculate trends
         net_subscriptions = new_subscribers_count - unsubscribes_count
         trend = "positive" if net_subscriptions > 0 else "negative" if net_subscriptions < 0 else "neutral"
+
+        return jsonify({
+            "total_new_subscribers": new_subscribers_count,
+            "total_unsubscribes": unsubscribes_count,
+            "net_subscriptions": net_subscriptions,
+            "trend": trend,
+            "start_date": start_date.strftime('%Y-%m-%d'),
+            "end_date": end_date.strftime('%Y-%m-%d')
+        }), 200
+
+    except Exception as e:
+        print(f"Error: {str(e)}")  # Log the error
+        return jsonify({"error": "Internal server error"}), 500
+
 
         return jsonify({
             "total_new_subscribers": new_subscribers_count,
