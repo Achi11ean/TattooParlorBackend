@@ -2055,8 +2055,10 @@ def get_subscriber_metrics():
         print(f"New Subscribers by Month: {new_subscribers_by_month}")  # Debug: Processed new subscribers
         print(f"Unsubscribes by Month: {unsubscribes_by_month}") 
         # Generate a complete list of months for the last 12 months
-        months = [(start_date + relativedelta(months=i)).strftime('%Y-%m') for i in range(12)]
+        months = [(end_date - relativedelta(months=i)).strftime('%Y-%m') for i in range(11, -1, -1)]
         print(f"Months for the Last Year: {months}")  # Debug: Month list
+        print(f"Generated Months: {months}")
+        print(f"Keys in New Subscribers by Month: {list(new_subscribers_by_month.keys())}")
 
         # Build lists for charting
         monthly_new_subscribers = [new_subscribers_by_month.get(month, 0) for month in months]
