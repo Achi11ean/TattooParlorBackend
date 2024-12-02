@@ -2014,6 +2014,7 @@ def get_subscriber_metrics():
         # Calculate the start and end dates for the last 12 months
         end_date = datetime.utcnow()
         start_date = end_date - timedelta(days=365)  # 12 months ago
+        print(f"Start Date: {start_date}, End Date: {end_date}")  # Debug: Date range
 
         # Query to calculate counts of new subscribers by month
         new_subscribers = db.session.query(
@@ -2025,6 +2026,7 @@ def get_subscriber_metrics():
             Subscriber.subscribed_at <= end_date,
             Subscriber.is_active == True
         ).group_by('year', 'month').all()
+        print(f"New Subscribers Raw Data: {new_subscribers}")  # Debug: New subscribers query results
 
         # Query to calculate counts of unsubscribes by month
         unsubscribes = db.session.query(
@@ -2036,6 +2038,7 @@ def get_subscriber_metrics():
             Subscriber.subscribed_at <= end_date,
             Subscriber.is_active == False
         ).group_by('year', 'month').all()
+        print(f"Unsubscribes Raw Data: {unsubscribes}")  # Debug: Unsubscribes query results
 
         # Helper function to convert query results into a dictionary keyed by year-month
         def build_monthly_data(query_results):
@@ -2047,17 +2050,21 @@ def get_subscriber_metrics():
         # Convert query results into dictionaries
         new_subscribers_by_month = build_monthly_data(new_subscribers)
         unsubscribes_by_month = build_monthly_data(unsubscribes)
-
+        print(f"New Subscribers by Month: {new_subscribers_by_month}")  # Debug: Processed new subscribers
+        print(f"Unsubscribes by Month: {unsubscribes_by_month}") 
         # Generate a complete list of months for the last 12 months
         months = [(start_date + timedelta(days=30 * i)).strftime('%Y-%m') for i in range(12)]
+        print(f"Months for the Last Year: {months}")  # Debug: Month list
 
         # Build lists for charting
         monthly_new_subscribers = [new_subscribers_by_month.get(month, 0) for month in months]
         monthly_unsubscribes = [unsubscribes_by_month.get(month, 0) for month in months]
-
+        print(f"Monthly New Subscribers: {monthly_new_subscribers}")  # Debug: Chart-ready data
+        print(f"Monthly Unsubscribes: {monthly_unsubscribes}") 
         # Calculate overall trends
         net_subscriptions = sum(monthly_new_subscribers) - sum(monthly_unsubscribes)
         trend = "positive" if net_subscriptions > 0 else "negative" if net_subscriptions < 0 else "neutral"
+        print(f"Net Subscriptions: {net_subscriptions}, Trend: {trend}")  # Debug: Overall trend
 
         return jsonify({
             "total_new_subscribers": sum(monthly_new_subscribers),
