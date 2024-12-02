@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 import json
 from flask_session import Session
 import pytz
+
 from flask_bcrypt import Bcrypt
 from functools import wraps
 from urllib.parse import urlparse
@@ -34,8 +35,10 @@ bcrypt = Bcrypt(app)
 serializer = URLSafeTimedSerializer(SECRET_KEY)
 CORS(app, supports_credentials=True, origins=["http://localhost:5173", "http://127.0.0.1:5173", "https://jwhitproductionstattooparlor.netlify.app"], allow_headers=["Content-Type", "Authorization"])
 
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URI')
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+if os.getenv('FLASK_ENV') == 'production':
+    app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URI')  # Use the deployed database
+else:
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///local.db'  # Use a local SQLite databaseapp.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 
@@ -52,7 +55,7 @@ def before_request():
         return '', 204
 
     # List of public endpoints that don't require authentication
-    public_endpoints = ['signup', 'signin', 'reset_password', 'get_piercings','send_message', 'get_booking', 'request_password_reset',  'delete_photo','search_piercings_by_name', 'search_bookings_by_name','search_piercings_and_bookings','get_average_rating', 'artists' ,'get_artist_by_id','get_artist_bookings','create_review','get_reviews','get_gallery', 'bookings', 'create_booking', 'get_all_galleries', 'show_create_artist_button','create_inquiry', 'create_piercing', 'delete_booking', 'delete_piercing', 'update_piercing', 'update_booking', 'get_or_create_global_setting','subscribe', 'get_newsletters', 'delete_newsletter','create_newsletter', 'get_subscribers']
+    public_endpoints = ['signup', 'signin', 'reset_password', 'get_piercings','send_message', 'get_booking', 'request_password_reset',  'delete_photo','search_piercings_by_name', 'search_bookings_by_name','search_piercings_and_bookings','get_average_rating', 'artists' ,'get_artist_by_id','get_artist_bookings','create_review','get_reviews','get_gallery', 'bookings', 'create_booking', 'get_all_galleries', 'show_create_artist_button','create_inquiry', 'create_piercing', 'delete_booking', 'delete_piercing', 'update_piercing', 'update_booking', 'get_or_create_global_setting','subscribe', 'get_newsletters', 'delete_newsletter','create_newsletter', 'get_subscribers', 'unsubscribe']
     if request.endpoint in public_endpoints:
         return  # Skip token validation for public endpoints
 
@@ -1918,7 +1921,7 @@ def delete_newsletter(newsletter_id):
 class Subscriber(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(255), nullable=False)
-    subscribed_at = db.Column(db.DateTime, nullable=False)
+    subscribed_at = db.Column(db.DateTime, nullable=False, default=db.func.now())
 
     def to_dict(self):
         return {
@@ -1926,6 +1929,7 @@ class Subscriber(db.Model):
             "email": self.email,
             "subscribed_at": self.subscribed_at.strftime("%A, %B %d, %Y %I:%M %p")  # Format date safely
         }
+
 
 @app.post('/api/subscribe')
 def subscribe():
@@ -1944,26 +1948,50 @@ def subscribe():
 
     return jsonify({"message": "Subscription successful", "subscriber": subscriber.to_dict()}), 201
 
+
 @app.get('/api/subscribers')
 def get_subscribers():
-    search_query = request.args.get('search', '', type=str)  # Get the search parameter from the query string
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 10, type=int)
+    search_query = request.args.get('search', '', type=str)
 
-    print(f"Received search query: {search_query}")  # Debugging: Print the search query
+    query = Subscriber.query
 
-    query = Subscriber.query  # Start with the base query
-
-    # Apply a filter if a search query is provided
     if search_query:
-        query = query.filter(Subscriber.email.ilike(f"%{search_query}%"))  # Case-insensitive partial match
-        print(f"Applying filter: Subscriber.email.ilike('%{search_query}%')")  # Debugging: Print the applied filter
+        query = query.filter(Subscriber.email.ilike(f"%{search_query}%"))
 
-    subscribers = query.all()  # Execute the query to get the filtered results
+    paginated_subscribers = query.paginate(page=page, per_page=per_page, error_out=False)
 
-    # Debugging: Print the resulting subscribers
-    print(f"Number of subscribers found: {len(subscribers)}")
-    print(f"Subscribers: {[subscriber.to_dict() for subscriber in subscribers]}")
+    return jsonify({
+        "subscribers": [subscriber.to_dict() for subscriber in paginated_subscribers.items],
+        "current_page": paginated_subscribers.page,
+        "total_pages": paginated_subscribers.pages
+    }), 200
 
-    return jsonify([subscriber.to_dict() for subscriber in subscribers]), 200
+
+@app.delete('/api/unsubscribe')
+def unsubscribe():
+    try:
+        email = request.args.get('email', type=str)  # Get the email from query parameters
+        if not email:
+            return jsonify({"error": "Email is required"}), 400
+
+        # Query the subscriber by email
+        subscriber = Subscriber.query.filter_by(email=email).first()
+        if not subscriber:
+            return jsonify({"error": "Subscriber not found"}), 404
+
+        # Delete the subscriber from the database
+        db.session.delete(subscriber)
+        db.session.commit()
+
+        print(f"Unsubscribed email: {email}")  # Log the unsubscribed email
+        return jsonify({"message": "Successfully unsubscribed"}), 200
+
+    except Exception as e:
+        print(f"Error: {str(e)}")  # Log any unexpected errors
+        return jsonify({"error": "Internal server error"}), 500
+
 
 if __name__ == "__main__":
     app.run(debug=True)
