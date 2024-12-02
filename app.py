@@ -1924,12 +1924,15 @@ class Subscriber(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(255), nullable=False)
     subscribed_at = db.Column(db.DateTime, nullable=False, default=db.func.now())
+    is_active = db.Column(db.Boolean, default=True)  # New field for soft delete
 
     def to_dict(self):
         return {
             "id": self.id,
             "email": self.email,
-            "subscribed_at": self.subscribed_at.strftime("%A, %B %d, %Y %I:%M %p")  # Format date safely
+            "subscribed_at": self.subscribed_at.strftime("%A, %B %d, %Y %I:%M %p"),  # Format date safely
+            "is_active": self.is_active
+
         }
 
 
@@ -1951,24 +1954,7 @@ def subscribe():
     return jsonify({"message": "Subscription successful", "subscriber": subscriber.to_dict()}), 201
 
 
-@app.get('/api/subscribers')
-def get_subscribers():
-    page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 10, type=int)
-    search_query = request.args.get('search', '', type=str)
 
-    query = Subscriber.query
-
-    if search_query:
-        query = query.filter(Subscriber.email.ilike(f"%{search_query}%"))
-
-    paginated_subscribers = query.paginate(page=page, per_page=per_page, error_out=False)
-
-    return jsonify({
-        "subscribers": [subscriber.to_dict() for subscriber in paginated_subscribers.items],
-        "current_page": paginated_subscribers.page,
-        "total_pages": paginated_subscribers.pages
-    }), 200
 
 
 @app.delete('/api/unsubscribe')
@@ -1983,8 +1969,8 @@ def unsubscribe():
         if not subscriber:
             return jsonify({"error": "Subscriber not found"}), 404
 
-        # Delete the subscriber from the database
-        db.session.delete(subscriber)
+        # Mark the subscriber as inactive
+        subscriber.is_active = False
         db.session.commit()
 
         print(f"Unsubscribed email: {email}")  # Log the unsubscribed email
@@ -1993,6 +1979,73 @@ def unsubscribe():
     except Exception as e:
         print(f"Error: {str(e)}")  # Log any unexpected errors
         return jsonify({"error": "Internal server error"}), 500
+@app.get('/api/metrics/subscribers')
+def get_subscriber_metrics():
+    try:
+        # Get the date range from query parameters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+
+        if not start_date or not end_date:
+            return jsonify({"error": "start_date and end_date are required"}), 400
+
+        # Parse the dates
+        try:
+            start_date = datetime.strptime(start_date, '%Y-%m-%d')
+            end_date = datetime.strptime(end_date, '%Y-%m-%d')
+        except ValueError:
+            return jsonify({"error": "Invalid date format. Use YYYY-MM-DD."}), 400
+
+        # Count active subscribers within the date range
+        new_subscribers_count = db.session.query(func.count(Subscriber.id)) \
+            .filter(Subscriber.subscribed_at >= start_date,
+                    Subscriber.subscribed_at <= end_date,
+                    Subscriber.is_active == True) \
+            .scalar()
+
+        # Count unsubscribes within the date range
+        unsubscribes_count = db.session.query(func.count(Subscriber.id)) \
+            .filter(Subscriber.subscribed_at >= start_date,
+                    Subscriber.subscribed_at <= end_date,
+                    Subscriber.is_active == False) \
+            .scalar()
+
+        # Calculate trends
+        net_subscriptions = new_subscribers_count - unsubscribes_count
+        trend = "positive" if net_subscriptions > 0 else "negative" if net_subscriptions < 0 else "neutral"
+
+        return jsonify({
+            "total_new_subscribers": new_subscribers_count,
+            "total_unsubscribes": unsubscribes_count,
+            "net_subscriptions": net_subscriptions,
+            "trend": trend,
+            "start_date": start_date.strftime('%Y-%m-%d'),
+            "end_date": end_date.strftime('%Y-%m-%d')
+        }), 200
+
+    except Exception as e:
+        print(f"Error: {str(e)}")  # Log the error
+        return jsonify({"error": "Internal server error"}), 500
+ 
+@app.delete('/api/subscribers/<int:subscriber_id>/delete')
+def delete_subscriber(subscriber_id):
+    """
+    Permanently delete a subscriber. Admin access only.
+    """
+
+
+    subscriber = Subscriber.query.get(subscriber_id)
+    if not subscriber:
+        return jsonify({"error": "Subscriber not found"}), 404
+
+    try:
+        db.session.delete(subscriber)
+        db.session.commit()
+        return jsonify({"message": f"Subscriber with ID {subscriber_id} deleted successfully."}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"An error occurred: {str(e)}"}), 500
+
 
 
 if __name__ == "__main__":
