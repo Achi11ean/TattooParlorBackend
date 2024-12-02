@@ -9,6 +9,7 @@ import json
 from flask_session import Session
 import pytz
 from collections import defaultdict
+from dateutil.relativedelta import relativedelta
 
 from flask_bcrypt import Bcrypt
 from functools import wraps
@@ -2053,7 +2054,7 @@ def get_subscriber_metrics():
         print(f"New Subscribers by Month: {new_subscribers_by_month}")  # Debug: Processed new subscribers
         print(f"Unsubscribes by Month: {unsubscribes_by_month}") 
         # Generate a complete list of months for the last 12 months
-        months = [(start_date + timedelta(days=30 * i)).strftime('%Y-%m') for i in range(12)]
+        months = [(start_date + relativedelta(months=i)).strftime('%Y-%m') for i in range(12)]
         print(f"Months for the Last Year: {months}")  # Debug: Month list
 
         # Build lists for charting
