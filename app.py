@@ -52,7 +52,7 @@ def before_request():
         return '', 204
 
     # List of public endpoints that don't require authentication
-    public_endpoints = ['signup', 'signin', 'reset_password', 'get_piercings','send_message', 'get_booking', 'request_password_reset',  'delete_photo','search_piercings_by_name', 'search_bookings_by_name','search_piercings_and_bookings','get_average_rating', 'artists' ,'get_artist_by_id','get_artist_bookings','create_review','get_reviews','get_gallery', 'bookings', 'create_booking', 'get_all_galleries', 'show_create_artist_button','create_inquiry', 'create_piercing', 'delete_booking', 'delete_piercing', 'update_piercing', 'update_booking', 'get_or_create_global_setting','subscribe', 'get_newsletters', 'delete_newsletter','create_newsletter']
+    public_endpoints = ['signup', 'signin', 'reset_password', 'get_piercings','send_message', 'get_booking', 'request_password_reset',  'delete_photo','search_piercings_by_name', 'search_bookings_by_name','search_piercings_and_bookings','get_average_rating', 'artists' ,'get_artist_by_id','get_artist_bookings','create_review','get_reviews','get_gallery', 'bookings', 'create_booking', 'get_all_galleries', 'show_create_artist_button','create_inquiry', 'create_piercing', 'delete_booking', 'delete_piercing', 'update_piercing', 'update_booking', 'get_or_create_global_setting','subscribe', 'get_newsletters', 'delete_newsletter','create_newsletter', 'get_subscribers']
     if request.endpoint in public_endpoints:
         return  # Skip token validation for public endpoints
 
@@ -1915,18 +1915,16 @@ def delete_newsletter(newsletter_id):
 
 
 #--------------------------------------------------------------------------------------------------------
-class Subscriber(db.Model, SerializerMixin):
-    __tablename__ = "subscribers"
-
+class Subscriber(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    email = db.Column(db.String(255), unique=True, nullable=False)
-    subscribed_at = db.Column(db.DateTime, default=db.func.now(), nullable=False)
+    email = db.Column(db.String(255), nullable=False)
+    subscribed_at = db.Column(db.DateTime, nullable=False)
 
     def to_dict(self):
         return {
             "id": self.id,
             "email": self.email,
-            "subscribed_at": format_datetime(self.subscribed_at)
+            "subscribed_at": self.subscribed_at.strftime("%A, %B %d, %Y %I:%M %p")  # Format date safely
         }
 
 @app.post('/api/subscribe')
