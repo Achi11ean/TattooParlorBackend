@@ -52,7 +52,7 @@ def before_request():
         return '', 204
 
     # List of public endpoints that don't require authentication
-    public_endpoints = ['signup', 'signin', 'reset_password', 'get_piercings','send_message', 'get_booking', 'request_password_reset',  'delete_photo','search_piercings_by_name', 'search_bookings_by_name','search_piercings_and_bookings','get_average_rating', 'artists' ,'get_artist_by_id','get_artist_bookings','create_review','get_reviews','get_gallery', 'bookings', 'create_booking', 'get_all_galleries', 'show_create_artist_button','create_inquiry', 'create_piercing', 'delete_booking', 'delete_piercing', 'update_piercing', 'update_booking', 'get_or_create_global_setting']
+    public_endpoints = ['signup', 'signin', 'reset_password', 'get_piercings','send_message', 'get_booking', 'request_password_reset',  'delete_photo','search_piercings_by_name', 'search_bookings_by_name','search_piercings_and_bookings','get_average_rating', 'artists' ,'get_artist_by_id','get_artist_bookings','create_review','get_reviews','get_gallery', 'bookings', 'create_booking', 'get_all_galleries', 'show_create_artist_button','create_inquiry', 'create_piercing', 'delete_booking', 'delete_piercing', 'update_piercing', 'update_booking', 'get_or_create_global_setting','subscribe', 'get_newsletters', 'create_newsletter']
     if request.endpoint in public_endpoints:
         return  # Skip token validation for public endpoints
 
@@ -1770,6 +1770,178 @@ def update_global_setting(key):
     db.session.commit()
 
     return jsonify({'message': 'Setting updated successfully.', key: setting.value == "true"}), 200
+
+#-----------------------------------------------------------------------------------------------------------------------------------
+def send_newsletter_email(recipient, subject, body, background_image_url=None):
+    """
+    Sends a newsletter email with a custom body and optional background image.
+    """
+    sender_email = os.getenv('EMAIL_ADDRESS')
+    sender_password = os.getenv('EMAIL_PASSWORD')
+    smtp_server = os.getenv('SMTP_SERVER')
+    smtp_port = int(os.getenv('SMTP_PORT', 587))  # Default to 587 if not provided
+
+    if not all([sender_email, sender_password, smtp_server, smtp_port]):
+        raise ValueError("Missing email configuration in environment variables.")
+
+    # Build the HTML body with inline styles and simplified structure
+    html_body = f"""
+    <html>
+    <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f4f4f4; color: #333; line-height: 1.6;">
+        <table align="center" border="0" cellpadding="0" cellspacing="0" style="max-width: 600px; width: 100%; background-color: #ffffff; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);">
+            <tr>
+                <td style="background-color: #222; color: #ffffff; text-align: center; padding: 20px;">
+                    <h1 style="margin: 0; font-size: 24px;">{subject}</h1>
+                </td>
+            </tr>
+            <tr>
+                <td style="padding: 20px; text-align: left; font-size: 16px; color: #333;">
+                    <p style="margin: 0 0 20px;">{body}</p>
+                    {f"<img src='{background_image_url}' alt='Newsletter Image' style='max-width: 100%; height: auto; display: block; margin: 10px 0;'>" if background_image_url else ""}
+                </td>
+            </tr>
+            <tr>
+                <td style="padding: 10px; background-color: #f4f4f4; text-align: center; font-size: 12px; color: #777;">
+                    <p style="margin: 0;">&copy; 2024 Tattoo Parlor. All rights reserved.</p>
+                </td>
+            </tr>
+        </table>
+    </body>
+    </html>
+    """
+
+    msg = MIMEMultipart("alternative")
+    msg["From"] = f"Newsletter <{sender_email}>"
+    msg["To"] = recipient
+    msg["Subject"] = subject
+    msg["Reply-To"] = sender_email
+
+    # Attach the plain text version as a fallback
+    text_body = f"{subject}\n\n{body}\n\n© 2024 Tattoo Parlor. All rights reserved."
+    msg.attach(MIMEText(text_body, "plain"))
+    msg.attach(MIMEText(html_body, "html"))
+
+    # Send the email
+    try:
+        with smtplib.SMTP(smtp_server, smtp_port) as server:
+            server.starttls()
+            server.login(sender_email, sender_password)
+            server.send_message(msg)
+        print(f"Newsletter sent successfully to {recipient}")
+    except Exception as e:
+        print(f"Failed to send newsletter to {recipient}: {str(e)}")
+
+
+
+class Newsletter(db.Model, SerializerMixin):
+    __tablename__ = "newsletters"
+
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(255), nullable=False)
+    image = db.Column(db.String(255), nullable=True)  # URL or file path for the image
+    body = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=db.func.now(), nullable=False)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "title": self.title,
+            "image": self.image,
+            "body": self.body,
+            "created_at": format_datetime(self.created_at)
+        }
+
+@app.post('/api/newsletters')
+def create_newsletter():
+    data = request.get_json()
+    title = data.get('title')
+    image = data.get('image')
+    body = data.get('body')
+
+    if not title or not body:
+        return jsonify({'error': 'Title and body are required'}), 400
+
+    newsletter = Newsletter(title=title, image=image, body=body)
+    db.session.add(newsletter)
+    db.session.commit()
+
+    # Send newsletter to all subscribers
+    subscribers = Subscriber.query.all()
+    for subscriber in subscribers:
+        send_newsletter_email(
+            recipient=subscriber.email,
+            subject=f"New Newsletter: {title}",
+            body=body,
+            background_image_url=image
+        )
+
+    return jsonify({"message": "Newsletter created and emails sent", "newsletter": newsletter.to_dict()}), 201
+
+
+@app.get('/api/newsletters')
+def get_newsletters():
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 10, type=int)
+    search_query = request.args.get('search', '').strip()
+
+    query = Newsletter.query
+
+    if search_query:
+        query = query.filter(Newsletter.title.ilike(f"%{search_query}%"))
+
+    paginated_newsletters = query.order_by(Newsletter.created_at.desc()).paginate(page=page, per_page=per_page)
+
+    return jsonify({
+        "newsletters": [newsletter.to_dict() for newsletter in paginated_newsletters.items],
+        "total_items": paginated_newsletters.total,
+        "total_pages": paginated_newsletters.pages,
+        "current_page": paginated_newsletters.page
+    }), 200
+
+
+
+
+#--------------------------------------------------------------------------------------------------------
+class Subscriber(db.Model, SerializerMixin):
+    __tablename__ = "subscribers"
+
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(255), unique=True, nullable=False)
+    subscribed_at = db.Column(db.DateTime, default=db.func.now(), nullable=False)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "email": self.email,
+            "subscribed_at": format_datetime(self.subscribed_at)
+        }
+
+@app.post('/api/subscribe')
+def subscribe():
+    data = request.get_json()
+    email = data.get('email')
+
+    if not email or not re.match(r"[^@]+@[^@]+\.[^@]+", email):
+        return jsonify({"error": "Invalid email format"}), 400
+
+    if Subscriber.query.filter_by(email=email).first():
+        return jsonify({"error": "This email is already subscribed"}), 400
+
+    subscriber = Subscriber(email=email)
+    db.session.add(subscriber)
+    db.session.commit()
+
+    return jsonify({"message": "Subscription successful", "subscriber": subscriber.to_dict()}), 201
+
+@app.get('/api/subscribers')
+@token_required
+def get_subscribers(current_user):
+    if current_user.user_type != 'admin':
+        return jsonify({'error': 'Access denied'}), 403
+
+    subscribers = Subscriber.query.all()
+    return jsonify([subscriber.to_dict() for subscriber in subscribers]), 200
+
 
 
 if __name__ == "__main__":
