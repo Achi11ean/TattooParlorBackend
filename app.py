@@ -2014,50 +2014,65 @@ def get_subscriber_metrics():
         end_date = datetime.utcnow()
         start_date = end_date - timedelta(days=365)  # 12 months ago
 
-        # Count active subscribers within the date range
-        new_subscribers_count = db.session.query(func.count(Subscriber.id)) \
-            .filter(Subscriber.subscribed_at >= start_date,
-                    Subscriber.subscribed_at <= end_date,
-                    Subscriber.is_active == True) \
-            .scalar()
+        # Query to calculate counts of new subscribers by month
+        new_subscribers = db.session.query(
+            extract('year', Subscriber.subscribed_at).label('year'),
+            extract('month', Subscriber.subscribed_at).label('month'),
+            func.count(Subscriber.id).label('count')
+        ).filter(
+            Subscriber.subscribed_at >= start_date,
+            Subscriber.subscribed_at <= end_date,
+            Subscriber.is_active == True
+        ).group_by('year', 'month').all()
 
-        # Count unsubscribes within the date range
-        unsubscribes_count = db.session.query(func.count(Subscriber.id)) \
-            .filter(Subscriber.subscribed_at >= start_date,
-                    Subscriber.subscribed_at <= end_date,
-                    Subscriber.is_active == False) \
-            .scalar()
+        # Query to calculate counts of unsubscribes by month
+        unsubscribes = db.session.query(
+            extract('year', Subscriber.subscribed_at).label('year'),
+            extract('month', Subscriber.subscribed_at).label('month'),
+            func.count(Subscriber.id).label('count')
+        ).filter(
+            Subscriber.subscribed_at >= start_date,
+            Subscriber.subscribed_at <= end_date,
+            Subscriber.is_active == False
+        ).group_by('year', 'month').all()
 
-        # Calculate trends
-        net_subscriptions = new_subscribers_count - unsubscribes_count
+        # Helper function to convert query results into a dictionary keyed by year-month
+        def build_monthly_data(query_results):
+            data = defaultdict(int)
+            for year, month, count in query_results:
+                data[f"{int(year)}-{int(month):02d}"] = count
+            return data
+
+        # Convert query results into dictionaries
+        new_subscribers_by_month = build_monthly_data(new_subscribers)
+        unsubscribes_by_month = build_monthly_data(unsubscribes)
+
+        # Generate a complete list of months for the last 12 months
+        months = [(start_date + timedelta(days=30 * i)).strftime('%Y-%m') for i in range(12)]
+
+        # Build lists for charting
+        monthly_new_subscribers = [new_subscribers_by_month.get(month, 0) for month in months]
+        monthly_unsubscribes = [unsubscribes_by_month.get(month, 0) for month in months]
+
+        # Calculate overall trends
+        net_subscriptions = sum(monthly_new_subscribers) - sum(monthly_unsubscribes)
         trend = "positive" if net_subscriptions > 0 else "negative" if net_subscriptions < 0 else "neutral"
 
         return jsonify({
-            "total_new_subscribers": new_subscribers_count,
-            "total_unsubscribes": unsubscribes_count,
+            "total_new_subscribers": sum(monthly_new_subscribers),
+            "total_unsubscribes": sum(monthly_unsubscribes),
             "net_subscriptions": net_subscriptions,
             "trend": trend,
             "start_date": start_date.strftime('%Y-%m-%d'),
-            "end_date": end_date.strftime('%Y-%m-%d')
+            "end_date": end_date.strftime('%Y-%m-%d'),
+            "monthly_new_subscribers": monthly_new_subscribers,
+            "monthly_unsubscribes": monthly_unsubscribes
         }), 200
 
     except Exception as e:
         print(f"Error: {str(e)}")  # Log the error
         return jsonify({"error": "Internal server error"}), 500
 
-
-        return jsonify({
-            "total_new_subscribers": new_subscribers_count,
-            "total_unsubscribes": unsubscribes_count,
-            "net_subscriptions": net_subscriptions,
-            "trend": trend,
-            "start_date": start_date.strftime('%Y-%m-%d'),
-            "end_date": end_date.strftime('%Y-%m-%d')
-        }), 200
-
-    except Exception as e:
-        print(f"Error: {str(e)}")  # Log the error
-        return jsonify({"error": "Internal server error"}), 500
  
 @app.delete('/api/subscribers/<int:subscriber_id>/delete')
 def delete_subscriber(subscriber_id):
