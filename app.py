@@ -1947,15 +1947,25 @@ def subscribe():
     return jsonify({"message": "Subscription successful", "subscriber": subscriber.to_dict()}), 201
 
 @app.get('/api/subscribers')
-@token_required
-def get_subscribers(current_user):
-    if current_user.user_type != 'admin':
-        return jsonify({'error': 'Access denied'}), 403
+def get_subscribers():
+    search_query = request.args.get('search', '', type=str)  # Get the search parameter from the query string
 
-    subscribers = Subscriber.query.all()
+    print(f"Received search query: {search_query}")  # Debugging: Print the search query
+
+    query = Subscriber.query  # Start with the base query
+
+    # Apply a filter if a search query is provided
+    if search_query:
+        query = query.filter(Subscriber.email.ilike(f"%{search_query}%"))  # Case-insensitive partial match
+        print(f"Applying filter: Subscriber.email.ilike('%{search_query}%')")  # Debugging: Print the applied filter
+
+    subscribers = query.all()  # Execute the query to get the filtered results
+
+    # Debugging: Print the resulting subscribers
+    print(f"Number of subscribers found: {len(subscribers)}")
+    print(f"Subscribers: {[subscriber.to_dict() for subscriber in subscribers]}")
+
     return jsonify([subscriber.to_dict() for subscriber in subscribers]), 200
-
-
 
 if __name__ == "__main__":
     app.run(debug=True)
