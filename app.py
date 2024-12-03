@@ -1400,6 +1400,7 @@ def request_password_reset():
     # Generate a secure token
     token = serializer.dumps(user.email, salt="password-reset-salt")
     reset_link = f"https://jwhitproductionstattooparlor.netlify.app/reset-password?token={token}"
+    print(f"Reset link: {reset_link}")
 
     # Send the email
     try:
