@@ -1338,7 +1338,7 @@ def admin_dashboard(current_user):  # Add current_user parameter
 @token_required
 def update_user(current_user, user_id):
     """
-    Update a user's details. Only admins or the user themselves can update their details.
+    Update a user's details. Only admins or the user themselves can update their details
     """
     # Fetch the user
     user = User.query.get(user_id)
